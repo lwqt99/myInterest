@@ -99,8 +99,6 @@ func Gcd(x *big.Int,y *big.Int) *big.Int {
 
 //x>y 拓展欧几里得算法
 func Exgcd(x *big.Int,y *big.Int) *big.Int {
-
-
 	one,_ := new(big.Int).SetString("1",10)
 	two,_ := new(big.Int).SetString("1",10)
 
@@ -123,5 +121,7 @@ func Exgcd(x *big.Int,y *big.Int) *big.Int {
 		s1,s2 = new(big.Int).Set(s2),new(big.Int).Set(one.Sub(s1,two.Mul(q,s2)))
 		t1,t2 = new(big.Int).Set(t2),new(big.Int).Set(one.Sub(t1,two.Mul(q,t2)))
 	}
+	// t1 * b + s1 * a = q
 	return t1
 }
+

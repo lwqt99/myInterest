@@ -76,3 +76,36 @@ func Exgcd(x *big.Int,y *big.Int) *big.Int {
 	return t1
 }
 
+
+//如果a是素数，则(p ^ (a - 1)) % a恒等于1
+func fmod(a *big.Int,p int64) bool {
+	one,_ := new(big.Int).SetString("1",10)
+	a_ := new(big.Int).Sub(a,one)
+	result := new(big.Int).Exp(new(big.Int).SetInt64(p),a_,a)
+	if result.String()!="1" {
+		return false//此时出错 返回false 结果必须要为1
+	}
+	return true
+}
+
+
+//MillerRabbin 素性检验
+func MillerRabbin(a *big.Int) bool {
+
+	p := new(big.Int).Set(a)
+
+	rand.Seed(time.Now().UnixNano())
+	//进行1000次检验
+	for i := 1; i < 100; i++ {
+		//判断失败则退出
+		n := rand.Int63()
+		if new(big.Int).SetInt64(n).Cmp(p) == 1 {
+			n = rand.Int63n(p.Int64() - 1) + 1
+		}
+		if !fmod(p, n) {
+			return false
+		}
+	}
+	return true
+}
+

@@ -3,11 +3,13 @@ package tools
 import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
 	"io/ioutil"
 	"math/big"
+	"crypto/rand"
 	"os"
 	"strings"
 )
@@ -134,6 +136,22 @@ func (*Ecdsa)LoadKey() error {
 	return nil
 }
 
+//生成签名
+func (*Ecdsa) Sign(message string) (*big.Int, *big.Int, error) {
+	hashMessage := sha256.Sum256([]byte(message))
+	r,s,err := ecdsa.Sign(rand.Reader, ECDSA.priKey, hashMessage[:])
+	if err!=nil {
+		return nil,nil, err
+	}
+	return r, s, nil
+}
+
+//签名校验
+func (*Ecdsa)Verify(message string,r, s *big.Int) bool {
+	hashMessage := sha256.Sum256([]byte(message))
+	right := ecdsa.Verify(ECDSA.pubKey, hashMessage[:], r, s)
+	return right
+}
 
 
 // 基于椭圆曲线的DH密码体质

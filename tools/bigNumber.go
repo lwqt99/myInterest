@@ -1,7 +1,11 @@
 package tools
+
 import (
+	"fmt"
 	"math/big"
+	"math/rand"
 	"strconv"
+	"time"
 )
 
 /*
@@ -73,7 +77,7 @@ func Exgcd(x *big.Int,y *big.Int) *big.Int {
 		t1,t2 = new(big.Int).Set(t2),new(big.Int).Set(one.Sub(t1,two.Mul(q,t2)))
 	}
 	// t1 * b + s1 * a = q
-	return t1
+	return s1
 }
 
 
@@ -109,3 +113,91 @@ func MillerRabbin(a *big.Int) bool {
 	return true
 }
 
+/*
+	用于提供长度为n的数，用于提取大素数
+*/
+func GenerateBigRange(n int64) *big.Int {
+	length := new(big.Int).SetInt64(n)
+	re,_ := new(big.Int).SetString("10",10)
+	re.Exp(re,length,nil)
+	return re
+}
+
+/*
+	用于生成大素数
+ */
+func GenerateBigPrimeP(n int64) *big.Int {
+	numRange := GenerateBigRange(n)
+	ran := rand.New(rand.NewSource(time.Now().UnixNano()))//创建的时候需要初始化其中一个值 用于生成随机数
+	ran.Seed(time.Now().UnixNano())
+
+	p := new(big.Int).Rand(ran,numRange)
+	for !MillerRabbin(p) {
+		p.Rand(ran,numRange)//更新p
+	}
+
+	return p
+}
+
+/*
+	基于大数的中国剩余定理
+	c(i) = c mod m(i)
+ */
+func BigNumCRT(n, primeRange int)  {
+	/*
+		n:	用于测试的方程组数量
+		primeRange:	生成测试的素数长度
+	 */
+	ran := rand.New(rand.NewSource(time.Now().UnixNano()))//创建的时候需要初始化其中一个值 用于生成随机数
+	ran.Seed(time.Now().UnixNano())
+	t := new(big.Int) //用于间接运算
+
+	var m []*big.Int
+	//生成m(i)
+	for i:= 0; i<n; i++{
+		m = append(m, GenerateBigPrimeP(int64(primeRange)))
+	}
+	//生成c(i)
+	var ci []*big.Int
+	for i:=0;i<n;i++{
+		t.Rand(ran,m[i])
+		for !MillerRabbin(t) {
+			t.Rand(ran,m[i])//更新p
+		}
+		ci = append(ci, t)
+	}
+	//计算同余方程组的解
+	//M = m(1)*m(2)*...*m(n)
+	M := new(big.Int).SetInt64(1)
+	for i := 0; i < n; i++ {
+		M.Mul(M, m[i])
+	}
+	//M(i) = M / m(i)
+	var Mi []*big.Int
+	for i := 0; i < n; i++ {
+		Mi = append(Mi, t.Div(M, m[i]))
+	}
+	//Mi*Ni mod mi = 1
+	var Ni []*big.Int
+	for i := 0; i < n; i++ {
+		Ni = append(Ni, Exgcd(Mi[i], m[i]))
+	}
+	//验证Mi*Ni mod mi = 1是否成立
+	//for i := 0; i < n; i++ {
+	//	t := new(big.Int).Mul(Mi[i], Ni[i])
+	//	t = t.Mod(t, m[i])
+	//	fmt.Println(t.String())
+	//}
+	//最终计算c
+	c := new(big.Int).SetInt64(0)
+	for i := 0; i < n; i++ {
+		t.Mul(ci[i], Ni[i])
+		t = t.Mul(t, Mi[i])
+		c.Add(c, t)
+	}
+	//验证同余方程是否成立 全部为0则成立
+	for i := 0; i < n; i++ {
+		fmt.Println("c % mi =",t.Mod(c, m[i]).Cmp(ci[i]))
+	}
+
+}

@@ -1,15 +1,20 @@
 package tools
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/asn1"
+	"encoding/binary"
 	"encoding/pem"
 	"errors"
+	"github.com/tjfoc/gmsm/sm3"
+	"io"
 	"io/ioutil"
 	"math/big"
-	"crypto/rand"
 	"os"
 	"strings"
 )
@@ -18,6 +23,13 @@ type Ecdsa struct {
 	randKey string
 	priKey *ecdsa.PrivateKey
 	pubKey *ecdsa.PublicKey
+}
+
+type Cipher struct {
+	XCoordinate *big.Int
+	YCoordinate *big.Int
+	HASH        []byte
+	CipherText  []byte
 }
 
 var ECDSA Ecdsa
@@ -89,7 +101,7 @@ func (*Ecdsa)generateKey(priFile, pubFile *os.File) error {
 
 // y^2  = x^3 + ax + b
 func (*Ecdsa)initECDSA() error {
-	ECDSA.randKey = "ljz abc 123456 random choose some helpful id well interest how dare you are"
+	ECDSA.randKey = "ljz abc 123456 random choose some helpful id"
 	// 初始化生成私匙公匙
 	priFile, _ := os.Create("./gitgit/certificate/ecdsa-prikey.pem")
 	pubFile, _ := os.Create("./gitgit/certificate/ecdsa-pubkey.pem")
@@ -153,6 +165,228 @@ func (*Ecdsa)Verify(message string,r, s *big.Int) bool {
 	return right
 }
 
+/*
+	用于生成随机数
+ */
+func randFieldElement(c elliptic.Curve, random io.Reader) (r *big.Int, err error) {
+	one := new(big.Int).SetInt64(1)
+	if random == nil {
+		random = rand.Reader //If there is no external trusted random source,please use rand.Reader to instead of it.
+	}
+	params := c.Params()
+	b := make([]byte, params.BitSize/8+8)
+	_, err = io.ReadFull(random, b)
+	if err != nil {
+		return
+	}
+	r = new(big.Int).SetBytes(b)
+	n := new(big.Int).Sub(params.N, one)
+	r.Mod(r, n)
+	r.Add(r, one)
+	return
+}
+
+func intToBytes(x int) []byte {
+	var buf = make([]byte, 4)
+
+	binary.BigEndian.PutUint32(buf, uint32(x))
+	return buf
+}
+
+// 填充
+func zeroByteSlice(n int) []byte {
+	return make([]byte,n)
+}
+
+/*
+	加密
+ */
+func kdf(length, bitsize int, x ...[]byte) ([]byte, bool) {
+	var c []byte
+
+	ct := 1
+	h := sm3.New()
+	for i, j := 0, (length+bitsize-1)/bitsize; i < j; i++ {
+		h.Reset()
+		for _, xx := range x {
+			h.Write(xx)
+		}
+		h.Write(intToBytes(ct))
+		hash := h.Sum(nil)
+		if i+1 == j && length%bitsize != 0 {
+			c = append(c, hash[:length%bitsize]...)
+		} else {
+			c = append(c, hash...)
+		}
+		ct++
+	}
+	for i := 0; i < length; i++ {
+		if c[i] != 0 {
+			return c, true
+		}
+	}
+	return c, false
+}
+
+func encrypt(message string, random io.Reader) ([]byte, error) {
+	data := []byte(message)
+	length := len(data)
+
+	for {
+		curve := ECDSA.pubKey.Curve
+		r, err := randFieldElement(curve, random)
+		if err != nil {
+			return nil, err
+		}
+		x1, y1 := curve.ScalarBaseMult(r.Bytes()) //计算rG(kG便于理解)
+		x2, y2 := curve.ScalarMult(ECDSA.pubKey.X, ECDSA.pubKey.Y, r.Bytes())
+
+		x1Buf := x1.Bytes()
+		y1Buf := y1.Bytes()
+		x2Buf := x2.Bytes()
+		y2Buf := y2.Bytes()
+
+		//fmt.Println(len(x1Buf))
+		bitsize := curve.Params().BitSize
+		bitsize_8 := bitsize / 8
+
+		if n := len(x1Buf); n < bitsize_8 {
+			x1Buf = append(zeroByteSlice(bitsize_8)[:bitsize_8-n], x1Buf...)
+		}
+		if n := len(y1Buf); n < bitsize_8 {
+			y1Buf = append(zeroByteSlice(bitsize_8)[:bitsize_8-n], y1Buf...)
+		}
+		if n := len(x2Buf); n < bitsize_8 {
+			x2Buf = append(zeroByteSlice(bitsize_8)[:bitsize_8-n], x2Buf...)
+		}
+		if n := len(y2Buf); n < bitsize_8 {
+			y2Buf = append(zeroByteSlice(bitsize_8)[:bitsize_8-n], y2Buf...)
+		}
+
+		// 计算加密结果
+		c := []byte{}
+		c = append(c, x1Buf...) // x分量
+		c = append(c, y1Buf...) // y分量
+		tm := []byte{}
+		tm = append(tm, x2Buf...)
+		tm = append(tm, data...)
+		tm = append(tm, y2Buf...)
+
+		h := sm3.Sm3Sum(tm)
+		c = append(c, h...)
+		ct, ok := kdf(length, bitsize_8, x2Buf, y2Buf) // 密文
+		if !ok {
+			continue
+		}
+		c = append(c, ct...)
+		//for i := 0; i < len(c); i++ {
+		//	fmt.Println(c[i])
+		//}
+		//fmt.Println(len(c))
+		for i := 0; i < length; i++ {
+			c[bitsize_8*3+i] ^= data[i]
+		}
+
+		return append([]byte{0x04}, c...), nil
+	}
+
+}
+
+func CipherMarshal(bitsize int, data []byte) ([]byte, error) {
+	data = data[1:]
+	x := new(big.Int).SetBytes(data[:bitsize])
+	y := new(big.Int).SetBytes(data[bitsize:bitsize*2])
+	hash := data[bitsize*2:bitsize*3]
+	cipherText := data[bitsize*3:]
+	return asn1.Marshal(Cipher{x, y, hash, cipherText})
+}
+
+func (*Ecdsa) EncryptAsn1(message string, random io.Reader) ([]byte, error) {
+	cipher, err := encrypt(message, random)
+	if err != nil {
+		return nil, err
+	}
+	return CipherMarshal(ECDSA.pubKey.Curve.Params().BitSize/8,cipher)
+}
+
+/*
+sm2密文asn.1编码格式转C1|C3|C2拼接格式
+*/
+func CipherUnmarshal(bitsize int, data []byte) ([]byte, error) {
+	var cipher Cipher
+	_, err := asn1.Unmarshal(data, &cipher)
+	if err != nil {
+		return nil, err
+	}
+	x := cipher.XCoordinate.Bytes()
+	y := cipher.YCoordinate.Bytes()
+	hash := cipher.HASH
+	if err != nil {
+		return nil, err
+	}
+	cipherText := cipher.CipherText
+	if err != nil {
+		return nil, err
+	}
+	if n := len(x); n < bitsize {
+		x = append(zeroByteSlice(bitsize)[:bitsize-n], x...)
+	}
+	if n := len(y); n < bitsize {
+		y = append(zeroByteSlice(bitsize)[:bitsize-n], y...)
+	}
+	c := []byte{}
+	c = append(c, x...)          // x分量
+	c = append(c, y...)          // y分
+	c = append(c, hash...)       // x分量
+	c = append(c, cipherText...) // y分
+	return append([]byte{0x04}, c...), nil
+}
+
+
+func decrypt(priv *ecdsa.PrivateKey, data []byte) ([]byte, error) {
+	data = data[1:]
+	length := len(data) - 96
+	curve := priv.Curve
+	bitsize_8 := curve.Params().BitSize / 8
+
+	x := new(big.Int).SetBytes(data[:bitsize_8])
+	y := new(big.Int).SetBytes(data[bitsize_8:bitsize_8*2])
+	x2, y2 := curve.ScalarMult(x, y, priv.D.Bytes())
+	x2Buf := x2.Bytes()
+	y2Buf := y2.Bytes()
+	if n := len(x2Buf); n < bitsize_8 {
+		x2Buf = append(zeroByteSlice(bitsize_8)[:bitsize_8-n], x2Buf...)
+	}
+	if n := len(y2Buf); n < bitsize_8 {
+		y2Buf = append(zeroByteSlice(bitsize_8)[:bitsize_8-n], y2Buf...)
+	}
+	c, ok := kdf(length,bitsize_8, x2Buf, y2Buf)
+	if !ok {
+		return nil, errors.New("Decrypt: failed to decrypt")
+	}
+	for i := 0; i < length; i++ {
+		c[i] ^= data[i+96]
+	}
+	tm := []byte{}
+	tm = append(tm, x2Buf...)
+	tm = append(tm, c...)
+	tm = append(tm, y2Buf...)
+	h := sm3.Sm3Sum(tm)
+	if bytes.Compare(h, data[bitsize_8*2:bitsize_8*3]) != 0 {
+		return c, errors.New("Decrypt: failed to decrypt")
+	}
+	return c, nil
+}
+
+
+func (*Ecdsa) DecryptAsn1(ciphertxt []byte) ([]byte, error) {
+	bitsize_8 := ECDSA.pubKey.Curve.Params().BitSize / 8
+	cipher, err := CipherUnmarshal(bitsize_8,ciphertxt)
+	if err != nil {
+		return nil, err
+	}
+	return decrypt(ECDSA.priKey, cipher)
+}
 
 // 基于椭圆曲线的DH密码体质
 func Diffie_Hellman(){

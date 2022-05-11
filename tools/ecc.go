@@ -345,9 +345,9 @@ func CipherUnmarshal(bitsize int, data []byte) ([]byte, error) {
 
 func decrypt(priv *ecdsa.PrivateKey, data []byte) ([]byte, error) {
 	data = data[1:]
-	length := len(data) - 96
 	curve := priv.Curve
 	bitsize_8 := curve.Params().BitSize / 8
+	length := len(data) - bitsize_8 * 3
 
 	x := new(big.Int).SetBytes(data[:bitsize_8])
 	y := new(big.Int).SetBytes(data[bitsize_8:bitsize_8*2])
@@ -365,7 +365,7 @@ func decrypt(priv *ecdsa.PrivateKey, data []byte) ([]byte, error) {
 		return nil, errors.New("Decrypt: failed to decrypt")
 	}
 	for i := 0; i < length; i++ {
-		c[i] ^= data[i+96]
+		c[i] ^= data[i+bitsize_8*3]
 	}
 	tm := []byte{}
 	tm = append(tm, x2Buf...)

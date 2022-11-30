@@ -8,6 +8,10 @@ import (
 	"time"
 )
 
+var Positive1 = new(big.Int).SetInt64(1)
+var Negative1 = new(big.Int).SetInt64(-1)
+var Positive2 = new(big.Int).SetInt64(2)
+
 /*
 	big包下的数字转为其它进制数
 	适合大位数转化
@@ -34,50 +38,60 @@ func BigNumBaseConversion(n *big.Int,base int) string {
 
 
 //求最大公约数
-func Gcd(x *big.Int,y *big.Int) *big.Int {
+func Gcd(x, y *big.Int) (*big.Int) {
 	modresult := new(big.Int)
 
 	a := new(big.Int).Set(x)
 	b := new(big.Int).Set(y)
-
 	modresult.Mod(a,b)
-
 	for modresult.String()!="0" {
 		a = new(big.Int).Set(b)
 		b = new(big.Int).Set(modresult)
 		modresult.Mod(a,b)
 	}
-
 	return b
 }
 
+//最小公倍数
+func Lcm(x, y *big.Int) (*big.Int) {
+	r := new(big.Int)
+	r.Mul(x, y)
+	r.Div(r, Gcd(x, y))
+	return r
+}
 
 //x>y 拓展欧几里得算法
-func Exgcd(x *big.Int,y *big.Int) *big.Int {
-	one,_ := new(big.Int).SetString("1",10)
-	two,_ := new(big.Int).SetString("1",10)
-
+func Exgcd(x *big.Int,y *big.Int) (*big.Int, *big.Int) {
 	a := new(big.Int).Set(x)
 	b := new(big.Int).Set(y)
 	//var temp string
-	t1,_ := new(big.Int).SetString("0",10)
-	t2,_ := new(big.Int).SetString("1",10)
+	t1 := new(big.Int).SetInt64(0)
+	t2 := new(big.Int).SetInt64(1)
 
-	s1,_ := new(big.Int).SetString("1",10)
-	s2,_ := new(big.Int).SetString("0",10)
+	s1 := new(big.Int).SetInt64(1)
+	s2 := new(big.Int).SetInt64(0)
 
-	moderesult,_ := new(big.Int).SetString("1",10)//初始化
-	q,_ := new(big.Int).SetString("1",10)//初始化
+	moderesult := new(big.Int)
+	q := new(big.Int)
 
 	for b.String() != "0"  {
-		moderesult = new(big.Int).Set(one.Mod(a,b))
-		q = new(big.Int).Set(one.Div(a,b))//(a-modresult)/b
+		moderesult = new(big.Int).Mod(a,b)
+		q = new(big.Int).Div(a,b)//(a-modresult)/b
 		a, b = new(big.Int).Set(b), new(big.Int).Set(moderesult)
-		s1,s2 = new(big.Int).Set(s2),new(big.Int).Set(one.Sub(s1,two.Mul(q,s2)))
-		t1,t2 = new(big.Int).Set(t2),new(big.Int).Set(one.Sub(t1,two.Mul(q,t2)))
+		s1,s2 = new(big.Int).Set(s2),new(big.Int).Sub(s1,new(big.Int).Mul(q,s2))
+		t1,t2 = new(big.Int).Set(t2),new(big.Int).Sub(t1,new(big.Int).Mul(q,t2))
 	}
-	// t1 * b + s1 * a = q
-	return s1
+	// t1 * y + s1 * x = gcd
+	//fmt.Println(new(big.Int).Add(new(big.Int).Mul(t1, y), new(big.Int).Mul(s1, x)))
+	return t1, s1
+}
+
+//判断是否互素（relatively prime）
+func RelativePrime(x, y *big.Int) bool {
+	if Gcd(x,y).String() == "1"{
+		return true
+	}
+	return false
 }
 
 
@@ -91,7 +105,6 @@ func fmod(a *big.Int,p int64) bool {
 	}
 	return true
 }
-
 
 //MillerRabbin 素性检验
 func MillerRabbin(a *big.Int) bool {
@@ -125,6 +138,7 @@ func GenerateBigRange(n int64) *big.Int {
 
 /*
 	用于生成大素数
+	n是长度
  */
 func GenerateBigPrimeP(n int64) *big.Int {
 	numRange := GenerateBigRange(n)
@@ -140,14 +154,27 @@ func GenerateBigPrimeP(n int64) *big.Int {
 }
 
 /*
-	基于大数的中国剩余定理
-	c(i) = c mod m(i)
+	随机数生成器
  */
-func BigNumCRT(n, primeRange int)  {
+func GenerateBigIntByRange(p *big.Int) *big.Int {
+	r := new(big.Int)
+	ran := rand.New(rand.NewSource(time.Now().UnixNano())) //创建的时候需要初始化其中一个值 用于生成随机数
+	time.Sleep(100)//避免重复生成一样的数值
+	ran.Seed(time.Now().UnixNano())
+	r.Rand(ran, p)
+	return r
+}
+
+/*
+	基于大数的中国剩余定理
+	测试
+	c(i) = c mod m(i)
+*/
+func TBigNumCRT(n, primeRange int)  {
 	/*
 		n:	用于测试的方程组数量
 		primeRange:	生成测试的素数长度
-	 */
+	*/
 	ran := rand.New(rand.NewSource(time.Now().UnixNano()))//创建的时候需要初始化其中一个值 用于生成随机数
 	ran.Seed(time.Now().UnixNano())
 	t := new(big.Int) //用于间接运算
@@ -180,7 +207,8 @@ func BigNumCRT(n, primeRange int)  {
 	//Mi*Ni mod mi = 1
 	var Ni []*big.Int
 	for i := 0; i < n; i++ {
-		Ni = append(Ni, Exgcd(Mi[i], m[i]))
+		_,t := Exgcd(Mi[i], m[i])
+		Ni = append(Ni, t)
 	}
 	//验证Mi*Ni mod mi = 1是否成立
 	//for i := 0; i < n; i++ {
@@ -200,4 +228,110 @@ func BigNumCRT(n, primeRange int)  {
 		fmt.Println("c % mi =",t.Mod(c, m[i]).Cmp(ci[i]))
 	}
 
+}
+
+/*
+	基于大数的中国剩余定理
+	c(i) = y(i) mod p(i)
+*/
+func BigNumCRT(yi, pi []*big.Int)  {
+	//n:用于测试的方程组数量
+	n := len(yi)
+	t := new(big.Int)
+
+	//计算同余方程组的解
+	//P = p1*p2*...*pn
+	P := new(big.Int).SetInt64(1)
+	for i := 0; i < n; i++ {
+		P.Mul(P, pi[i])
+	}
+	//P(i) = P / pi
+	Pi := make([]*big.Int, n)
+	for i := 0; i < n; i++ {
+		Pi[i] = new(big.Int).Div(P, pi[i])
+	}
+	//Pi*Ni mod pi = 1
+	Ni := make([]*big.Int, n)
+	for i := 0; i < n; i++ {
+		_,t := Exgcd(Pi[i], pi[i])
+		Ni[i] = t
+	}
+
+	//最终计算c
+	c := new(big.Int).SetInt64(0)
+	for i := 0; i < n; i++ {
+		t.Mul(yi[i], Ni[i])
+		t = t.Mul(t, Pi[i])
+		c.Add(c, t)
+	}
+	//验证同余方程是否成立 全部为0则成立
+	for i := 0; i < n; i++ {
+		fmt.Println("c % pi =",t.Mod(c, pi[i]).Cmp(yi[i]))
+	}
+
+}
+
+//计算nx mod p = y
+//需要在合适的时候退出
+//引入error
+func MatchXY(x, y, p *big.Int) *big.Int {
+	r := new(big.Int).Set(x)
+	t := new(big.Int).SetInt64(1)
+	for r.Cmp(y) != 0 {
+		t.Add(t, Positive1)
+		r.Mul(x, t)
+		r.Mod(r, p)
+	}
+	return t
+}
+
+//计算nx mod p = y
+func MatchXYInt64(x, y, p int64) int64 {
+	r := x
+	t := int64(1)
+	for r != y {
+		t++
+		r = x * t
+		r = r % p
+	}
+	return t
+}
+
+/*
+	用于辅助下面的寻找生成元
+
+*/
+func HelpFindAllMebComG(P_ []*big.Int, n *big.Int) bool {
+	length := len(P_)
+	for i := 0; i < length; i++ {
+		//不为1说明两者不互质
+		if Gcd(P_[i], n).String() != "1" {
+			return false
+		}
+	}
+	return true
+}
+
+/*
+	找到各个Pi的共同的生成元g
+	输入Pi数组
+	原理为：找到与各个质数互质的值 满足最大公约数为1 即gcd为1
+*/
+func FindAllMebComG(P []*big.Int) *big.Int {
+	n := len(P)
+	var b []bool //布尔数组
+	for i := 0; i < n; i++ {
+		b = append(b, false)
+	}
+	var P_ []*big.Int
+	temp := new(big.Int)
+	for i := 0; i < n; i++ {
+		P_ = append(P_, new(big.Int).Set(temp.Sub(P[i], Positive1)))
+	}
+	//找到共同的生成元
+	re := new(big.Int).SetInt64(int64(2))
+	for !HelpFindAllMebComG(P_, re) {
+		re.Add(re, Positive1) //自增1
+	}
+	return re
 }

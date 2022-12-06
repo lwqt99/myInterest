@@ -13,6 +13,8 @@ func (p *Point) Init(x, y *big.Int) *Point {
 }
 
 func (p *Point) SetPoint(point *Point) *Point {
+	//fmt.Println(point)
+	//fmt.Println(p)
 	p.X = new(big.Int).Set(point.X)
 	p.Y = new(big.Int).Set(point.Y)
 	return p

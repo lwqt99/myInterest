@@ -12,7 +12,7 @@ func LagrangeInterBigInt(x, y []*big.Int, q *big.Int) *Poly {
 	for i := 0; i < n; i++ {
 		//初始化结果
 		roundResult := new(Poly).SetBigInt(y[i])
-		//构建(x-xi)(xi-xj)
+		//构建(x-xi)/(xi-xj)
 		for j := 0; j < n; j++ {
 			if j != i{
 				//计算xi-xj的逆

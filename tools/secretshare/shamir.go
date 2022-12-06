@@ -10,6 +10,7 @@ import (
 
 /*
 	q:有限域q中
+	调用语句：secretshare.Shamir(tools.GenerateBigPrimeP(5),new(big.Int).SetInt64(3331), 3)
  */
 func Shamir(q, secret *big.Int, n int) ([]*big.Int,[]*big.Int,error) {
 	//判断q是否为素数

@@ -12,7 +12,7 @@ type Point struct {
 }
 
 //定义椭圆曲线 Weierstrass形式
-type Curve struct {
+type CurveWeierstrass struct {
 	P *big.Int//域p
 	//y^2 = x^3 + ax + b
 	//4a^3 + 27b^2 != 0
@@ -20,4 +20,14 @@ type Curve struct {
 	B *big.Int
 	G *Point//base point
 	N *big.Int//G元素的阶
+	BitSize int64
+}
+
+type PublicKey struct {
+	P *Point
+}
+
+type PrivateKey struct {
+	K *big.Int
+	Pub *PublicKey// pub = k * G
 }

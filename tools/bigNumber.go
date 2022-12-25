@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -40,7 +41,7 @@ func BigNumBaseConversion(n *big.Int, base int) string {
 }
 
 // 判断是否为2次幂
-func IsPow2(x *big.Int) bool {
+func JudgePow2(x *big.Int) bool {
 	strX := BigNumBaseConversion(x, 2)
 	//查看是否有额外的1
 	for i := 1; i < len(strX); i++ {
@@ -49,19 +50,6 @@ func IsPow2(x *big.Int) bool {
 		}
 	}
 	return true
-}
-
-func IsEven(x *big.Int) bool {
-	if new(big.Int).Mod(x, Positive2).String() == "0" {
-		return true
-	}
-	return false
-}
-
-// 判断和 p / 2 的关系
-func CmpMidP(x, p *big.Int) int {
-	p.Div(p, Positive2)
-	return x.Cmp(p)
 }
 
 // 求最大公约数
@@ -371,4 +359,96 @@ func GenerateBigIntByByte(bitsize int64, rand io.Reader) (*big.Int, error) {
 		return nil, err
 	}
 	return new(big.Int).SetBytes(b), nil
+}
+
+// LegendreSymbol
+/*
+	Legendre symbol
+	n 整数, p素数
+*/
+func LegendreSymbol(n, p *big.Int) (*big.Int, error) {
+	//判断p是否为素数
+	if !MillerRabbin(p) {
+		return nil, errors.New("p should be prime number")
+	}
+	//重置n
+	n.Mod(n, p)
+	//计算 n^((p-1)/2) mod p
+	t := new(big.Int).Sub(p, Positive1)
+	t.Div(t, Positive2) //t = (p - 1) / 2
+
+	LS := new(big.Int).Exp(n, t, p)
+	//fmt.Println("LS=", LS.String())
+	return LS, nil
+}
+
+// Cipolla
+/*
+	Cipolla算法
+	解决二次剩余计算问题：求解 x*x = n mod p
+*/
+func Cipolla(n, p *big.Int) (*big.Int, error) {
+	//判断是否存在解
+	LS, err := LegendreSymbol(n, p)
+	if err != nil || LS.String() != "1" {
+		return nil, errors.New("There doesn't exit an solution. ")
+	}
+	//求解
+	//随机生成r
+	r := GenerateBigIntByRange(p)
+	squareR := new(big.Int).Exp(r, Positive2, p)
+	//重新计算LS
+	for LS.String() != new(big.Int).Sub(p, Positive1).String() {
+		r = GenerateBigIntByRange(p)
+		squareR = new(big.Int).Exp(r, Positive2, p)
+		//计算r^2 - n的勒让德符号
+		t := new(big.Int).Sub(squareR, n)
+		t.Mod(t, p) //t = r^2 - n
+		LS, _ = LegendreSymbol(t, p)
+	}
+	//计算二次剩余
+	//x := new(big.Int)
+	//定义 w^2 = r^2 - n
+	squareW := new(big.Int).Sub(squareR, n)
+	squareW.Mod(squareW, p)
+	//x = (a + w) ^ ((p+1)/2)
+	//复数的快速幂
+	t := new(big.Int).Add(p, Positive1)
+	t.Div(t, Positive2) //t = ((p+1)/2)
+	//定义虚数
+	im := struct {
+		x *big.Int
+		y *big.Int
+	}{}
+	im.x = new(big.Int).SetInt64(1)
+	im.y = new(big.Int).SetInt64(0)
+	//定义Ax Ay
+	Ax, Ay := new(big.Int).Set(r), new(big.Int).SetInt64(1)
+
+	seq := BigNumBaseConversion(t, 2)
+	//fmt.Println(seq)
+	for i := 0; i < len(seq); i++ {
+		if string(seq[len(seq)-i-1]) == "1" {
+			//做乘法
+			//new(big.Int).Mul(im.y, Ay)要乘上w*w
+			im.x, im.y = new(big.Int).Add(new(big.Int).Mul(im.x, Ax), new(big.Int).Mul(new(big.Int).Mul(im.y, Ay), squareW)),
+				new(big.Int).Add(new(big.Int).Mul(im.x, Ay), new(big.Int).Mul(im.y, Ax))
+
+			im.x = im.x.Mod(im.x, p)
+			im.y = im.y.Mod(im.y, p)
+		}
+		//Ax Ay 自乘
+		Ax, Ay = new(big.Int).Add(new(big.Int).Mul(Ax, Ax), new(big.Int).Mul(new(big.Int).Mul(Ay, Ay), squareW)),
+			new(big.Int).Mul(new(big.Int).Mul(Ax, Ay), Positive2)
+
+		Ax = Ax.Mod(Ax, p)
+		Ay = Ay.Mod(Ay, p)
+	}
+	//fmt.Println("x=", im.x, "y=", im.y)
+	//fmt.Println("x=", new(big.Int).Sub(p, im.x), "y=", im.y)
+	//验证
+	//v := new(big.Int).Exp(im.x, Positive2, p)
+	//fmt.Println("x^2=", v.String())
+
+	return im.x, nil
 }

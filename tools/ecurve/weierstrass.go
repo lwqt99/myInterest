@@ -60,6 +60,16 @@ func (c *CurveWeierstrass) cmpMidP(x *big.Int) int64 {
 	return 1
 }
 
+// 计算y*y即
+// x^3 + ax + b
+func (c CurveWeierstrass) getF(x *big.Int) *big.Int {
+	f := new(big.Int).Exp(x, new(big.Int).SetInt64(3), c.P)
+	f.Add(f, c.B)
+	f.Add(f, new(big.Int).Mul(c.A, x))
+	f.Mod(f, c.P)
+	return f
+}
+
 // 验证点是否在曲线上
 func (c *CurveWeierstrass) VerifyPointExit(point *Point) bool {
 	//无穷点直接返回正确
@@ -155,6 +165,13 @@ func (c *CurveWeierstrass) Add(point1, point2 *Point) *Point {
 	return r
 }
 
+// 椭圆曲线上的点相减
+// 选择对称点即可
+func (c *CurveWeierstrass) Sub(point1, point2 *Point) *Point {
+	rPoint2 := c.revPoint(point2)
+	return c.Add(point1, rPoint2)
+}
+
 // 多倍点
 func (c *CurveWeierstrass) Mul(k *big.Int, p *Point) *Point {
 	//k转二进制
@@ -241,46 +258,56 @@ func (c *CurveWeierstrass) InitP384() *CurveWeierstrass {
 	var BitSize int64 = 384
 
 	c.Init(A, B, P, N, new(Point).Init(Gx, Gy), BitSize)
-
 	return c
-}
-
-func (c *CurveWeierstrass) hash2Y(binM []byte) *big.Int {
-	x := new(big.Int).SetBytes(binM)
-	fx := new(big.Int).Mul(x, x)
-	fx.Add(fx, new(big.Int).Mul(x, c.A))
-	fx.Add(fx, c.B)
-	return fx
-}
-
-// M映射至椭圆曲线上
-func (c *CurveWeierstrass) Hash2Curve(m string) {
-	//对m进行哈希
-	hashM := sha256.Sum256([]byte(m))
-	//验证点是否在曲线上
-	x := new(big.Int).SetBytes(hashM[:])
-	fx := new(big.Int).Mul(x, x)
-	fx.Add(fx, new(big.Int).Mul(x, c.A))
-	fx.Add(fx, c.B)
-	for t, hashX := new(big.Int).Sqrt(c.hash2Y(hashM[:])), sha256.Sum256([]byte(m)); new(big.Int).Mul(t, t).Cmp(t) != 0; {
-		hashX = sha256.Sum256(hashX[:]) //二次哈希
-		t = c.hash2Y(hashX[:])
-	}
-
 }
 
 // Weierstrass格式
 // m需要进行转换，映射到curve中
-func (c *CurveWeierstrass) Enc(m *Point, pub *PublicKey) (*Point, *Point) {
+func (c *CurveWeierstrass) Enc(m string, pub *PublicKey) (*big.Int, *Point, *Point) {
+	//m映射到曲线上
+	//采用hash法
+	byteM := []byte(m)
+	bigIntM := new(big.Int).SetBytes(byteM)
+	//哈希
+	e := sha256.Sum256(byteM)
+	x := new(big.Int).SetBytes(e[:])
+	x.Add(x, bigIntM)
+	//求f = x^3 + ax + b
+	f := c.getF(x)
+	//曲线映射
+	//判断是否OK
+	for LS, _ := tools.LegendreSymbol(f, c.P); LS.String() != "1"; LS, _ = tools.LegendreSymbol(f, c.P) {
+		//x更新
+		e = sha256.Sum256(e[:]) //自己hash自己
+		x = new(big.Int).SetBytes(e[:])
+		x.Add(x, bigIntM)
+
+		f = c.getF(x)
+		//fmt.Println(f)
+	}
+	//求解y
+	y, _ := tools.Cipolla(f, c.P)
 	//加密
+	pointM := new(Point).Init(x, y)
+	fmt.Println("映射为点：", pointM.String())
+	//fmt.Println("验证点的存在：", c.VerifyPointExit(pointM))
 	//生成加密用的随机数r
 	r := tools.GenerateBigIntByRange(c.N)
-	rPub := c.Mul(r, pub.P) //r * pub
+	rPub := c.Mul(r, pub.P)   //r * pub
+	c1 := c.Mul(r, c.G)       //r * g
+	c2 := c.Add(rPub, pointM) //r * pub + m
 
-	c1 := c.Mul(r, c.G)  //r * g
-	c2 := c.Add(rPub, m) //r * pub + m
+	return new(big.Int).SetBytes(e[:]), c1, c2
+}
 
-	return c1, c2
+// 解密
+func (c CurveWeierstrass) Dec(hashM *big.Int, c1, c2 *Point, pri *PrivateKey) string {
+	pointM := c.Sub(c2, c.Mul(pri.K, c1))
+	fmt.Println("解密为点：", pointM.String())
+	//取出x减去hashM
+	bigIntM := new(big.Int).Sub(pointM.X, hashM)
+	//映射为string
+	return string(bigIntM.Bytes())
 }
 
 // 哈希函数采用SHA256

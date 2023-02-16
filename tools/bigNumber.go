@@ -10,6 +10,7 @@ import (
 	"time"
 )
 
+var Zero = new(big.Int).SetInt64(0)
 var Positive1 = new(big.Int).SetInt64(1)
 var Negative1 = new(big.Int).SetInt64(-1)
 var Positive2 = new(big.Int).SetInt64(2)
@@ -52,7 +53,21 @@ func JudgePow2(x *big.Int) bool {
 	return true
 }
 
-// 求最大公约数
+// Floor 向下取整 x / y
+func Floor(x, y *big.Int) *big.Int {
+	return new(big.Int).Div(x, y)
+}
+
+// Ceil 向上取整
+func Ceil(x, y *big.Int) *big.Int {
+	if new(big.Int).Mod(x, y).String() == "0" {
+		return new(big.Int).Div(x, y)
+	}else {
+		return new(big.Int).Add(new(big.Int).Div(x, y), Positive1)
+	}
+}
+
+// Gcd 求最大公约数
 func Gcd(x, y *big.Int) *big.Int {
 	modresult := new(big.Int)
 
@@ -67,7 +82,7 @@ func Gcd(x, y *big.Int) *big.Int {
 	return b
 }
 
-// 最小公倍数
+// Lcm 最小公倍数
 func Lcm(x, y *big.Int) *big.Int {
 	r := new(big.Int)
 	r.Mul(x, y)
@@ -75,7 +90,7 @@ func Lcm(x, y *big.Int) *big.Int {
 	return r
 }
 
-// x>y 拓展欧几里得算法
+// Exgcd x>y 拓展欧几里得算法
 func Exgcd(x *big.Int, y *big.Int) (*big.Int, *big.Int) {
 	a := new(big.Int).Set(x)
 	b := new(big.Int).Set(y)
@@ -101,12 +116,17 @@ func Exgcd(x *big.Int, y *big.Int) (*big.Int, *big.Int) {
 	return t1, s1
 }
 
-// 判断是否互素（relatively prime）
+// RelativePrime 判断是否互素（relatively prime）
 func RelativePrime(x, y *big.Int) bool {
 	if Gcd(x, y).String() == "1" {
 		return true
 	}
 	return false
+}
+
+// FindSmallRelativePrime 从小到大找出互素
+func FindSmallRelativePrime(p *big.Int) *big.Int {
+	return nil
 }
 
 // 如果a是素数，则(p ^ (a - 1)) % a恒等于1
@@ -150,9 +170,10 @@ func GenerateBigRange(n int64) *big.Int {
 	return re
 }
 
+// GenerateBigPrimeP
 /*
-用于生成大素数
-n是长度
+	用于生成大素数
+	n是长度
 */
 func GenerateBigPrimeP(n int64) *big.Int {
 	numRange := GenerateBigRange(n)

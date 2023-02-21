@@ -10,6 +10,7 @@ import (
 	"strconv"
 )
 
+// Init 输入大数初始化椭圆曲线
 func (c *CurveWeierstrass) Init(a, b, p, n *big.Int, g *Point, bitsize int64) *CurveWeierstrass {
 	//y^2 = x^3 + ax + b
 	c.P = new(big.Int).Set(p)
@@ -23,6 +24,7 @@ func (c *CurveWeierstrass) Init(a, b, p, n *big.Int, g *Point, bitsize int64) *C
 	return c
 }
 
+// SetInt64 输入int64初始化椭圆曲线
 func (c *CurveWeierstrass) SetInt64(a, b, n, p int64) *CurveWeierstrass {
 	c.P = new(big.Int).SetInt64(p)
 	c.A = new(big.Int).SetInt64(a)
@@ -31,6 +33,7 @@ func (c *CurveWeierstrass) SetInt64(a, b, n, p int64) *CurveWeierstrass {
 	return c
 }
 
+// SetCurveWeierstrass 基于已有的椭圆曲线初始化
 func (c *CurveWeierstrass) SetCurveWeierstrass(curve *CurveWeierstrass) *CurveWeierstrass {
 	c.P = new(big.Int).Set(curve.P)
 	c.A = new(big.Int).Set(curve.A)
@@ -62,7 +65,7 @@ func (c *CurveWeierstrass) cmpMidP(x *big.Int) int64 {
 
 // 计算y*y即
 // x^3 + ax + b
-func (c CurveWeierstrass) getF(x *big.Int) *big.Int {
+func (c *CurveWeierstrass) getF(x *big.Int) *big.Int {
 	f := new(big.Int).Exp(x, new(big.Int).SetInt64(3), c.P)
 	f.Add(f, c.B)
 	f.Add(f, new(big.Int).Mul(c.A, x))
@@ -70,10 +73,10 @@ func (c CurveWeierstrass) getF(x *big.Int) *big.Int {
 	return f
 }
 
-// 验证点是否在曲线上
+// VerifyPointExit 验证点是否在曲线上
 func (c *CurveWeierstrass) VerifyPointExit(point *Point) bool {
 	//无穷点直接返回正确
-	if IE(point) {
+	if IsOne(point) {
 		return true
 	}
 
@@ -127,7 +130,7 @@ func (c *CurveWeierstrass) getSlope(point1, point2 *Point) *big.Int {
 	}
 }
 
-// 椭圆曲线上的点相加
+// Add 椭圆曲线上的点相加
 // 做直线，找交点，选择对称点
 // 重合则是切线
 func (c *CurveWeierstrass) Add(point1, point2 *Point) *Point {
@@ -136,9 +139,9 @@ func (c *CurveWeierstrass) Add(point1, point2 *Point) *Point {
 		return nil
 	}
 	//如果存在无穷点则应该直接返回结果
-	if IE(point1) {
+	if IsOne(point1) {
 		return point2
-	} else if IE(point2) {
+	} else if IsOne(point2) {
 		//fmt.Println("point2 is Identity Element")
 		return point1
 	}
@@ -165,14 +168,14 @@ func (c *CurveWeierstrass) Add(point1, point2 *Point) *Point {
 	return r
 }
 
-// 椭圆曲线上的点相减
+// Sub 椭圆曲线上的点相减
 // 选择对称点即可
 func (c *CurveWeierstrass) Sub(point1, point2 *Point) *Point {
 	rPoint2 := c.revPoint(point2)
 	return c.Add(point1, rPoint2)
 }
 
-// 多倍点
+// Mul 多倍点
 func (c *CurveWeierstrass) Mul(k *big.Int, p *Point) *Point {
 	//k转二进制
 	binaryK := tools.BigNumBaseConversion(k, 2)
@@ -228,7 +231,7 @@ func (c *CurveWeierstrass) ShowPoint() {
 	fmt.Println("元素的个数（含无穷点）=", n*2+1)
 }
 
-// Weierstrass格式
+// GenerateKey Weierstrass格式
 func (c *CurveWeierstrass) GenerateKey(rand io.Reader) (*PrivateKey, error) {
 	if rand == nil {
 		rand = crand.Reader
@@ -247,21 +250,7 @@ func (c *CurveWeierstrass) GenerateKey(rand io.Reader) (*PrivateKey, error) {
 	return pri, nil
 }
 
-func (c *CurveWeierstrass) InitP384() *CurveWeierstrass {
-	// See FIPS 186-3, section D.2.4
-	P, _ := new(big.Int).SetString("39402006196394479212279040100143613805079739270465446667948293404245721771496870329047266088258938001861606973112319", 10)
-	N, _ := new(big.Int).SetString("39402006196394479212279040100143613805079739270465446667946905279627659399113263569398956308152294913554433653942643", 10)
-	A := new(big.Int).SetInt64(-3)
-	B, _ := new(big.Int).SetString("b3312fa7e23ee7e4988e056be3f82d19181d9c6efe8141120314088f5013875ac656398d8a2ed19d2a85c8edd3ec2aef", 16)
-	Gx, _ := new(big.Int).SetString("aa87ca22be8b05378eb1c71ef320ad746e1d3b628ba79b9859f741e082542a385502f25dbf55296c3a545e3872760ab7", 16)
-	Gy, _ := new(big.Int).SetString("3617de4a96262c6f5d9e98bf9292dc29f8f41dbd289a147ce9da3113b5f0b8c00a60b1ce1d7e819d7a431d7c90ea0e5f", 16)
-	var BitSize int64 = 384
-
-	c.Init(A, B, P, N, new(Point).Init(Gx, Gy), BitSize)
-	return c
-}
-
-// Weierstrass格式
+// Enc Weierstrass格式
 // m需要进行转换，映射到curve中
 func (c *CurveWeierstrass) Enc(m string, pub *PublicKey) (*big.Int, *Point, *Point) {
 	//m映射到曲线上
@@ -300,8 +289,8 @@ func (c *CurveWeierstrass) Enc(m string, pub *PublicKey) (*big.Int, *Point, *Poi
 	return new(big.Int).SetBytes(e[:]), c1, c2
 }
 
-// 解密
-func (c CurveWeierstrass) Dec(hashM *big.Int, c1, c2 *Point, pri *PrivateKey) string {
+// Dec 解密
+func (c *CurveWeierstrass) Dec(hashM *big.Int, c1, c2 *Point, pri *PrivateKey) string {
 	pointM := c.Sub(c2, c.Mul(pri.K, c1))
 	fmt.Println("解密为点：", pointM.String())
 	//取出x减去hashM
@@ -310,7 +299,7 @@ func (c CurveWeierstrass) Dec(hashM *big.Int, c1, c2 *Point, pri *PrivateKey) st
 	return string(bigIntM.Bytes())
 }
 
-// 哈希函数采用SHA256
+// Signature 哈希函数采用SHA256
 // https://blog.csdn.net/gitcoins/article/details/125938207
 func (c *CurveWeierstrass) Signature(m string, pri *PrivateKey) (*Point, *Point) {
 	//生成哈希

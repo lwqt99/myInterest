@@ -4,13 +4,15 @@ import (
 	"math/big"
 )
 
-// 定义椭圆曲线上的点
+// Point 定义椭圆曲线上的点
+// 不存在任何特殊运算
+// 单纯用于集成表示
 type Point struct {
 	X *big.Int
 	Y *big.Int
 }
 
-// 定义椭圆曲线 Weierstrass形式
+// CurveWeierstrass 定义椭圆曲线 Weierstrass形式
 type CurveWeierstrass struct {
 	P *big.Int //域p
 	//y^2 = x^3 + ax + b

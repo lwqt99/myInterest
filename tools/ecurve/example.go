@@ -5,6 +5,7 @@ import (
 	crand "crypto/rand"
 	"fmt"
 	"gitgit/tools"
+	"gitgit/tools/Simulation"
 	"math/big"
 )
 
@@ -12,7 +13,64 @@ func Tr() {
 
 }
 
-// 测试Weierstrass表达的椭圆曲线
+func TestNG() {
+	c := new(CurveWeierstrass).InitSM2()
+
+	fmt.Println(c.P.Cmp(c.N))
+	fmt.Println(new(big.Int).Mod(c.P, c.N))
+
+}
+
+func TestAddJacobian() {
+	c := new(CurveWeierstrass).InitP384()
+
+	n1 := new(big.Int).Set(c.N)
+	n2 := new(big.Int).Set(new(big.Int).Add(c.N, tools.Positive1))
+
+	p1 := c.Mul(n1, c.G)
+	p2 := c.Mul(n2, c.G)
+
+	fmt.Println("g=", c.G)
+	fmt.Println("p1=", p1)
+	fmt.Println("p2=", p2)
+
+	//输出正确答案
+	fmt.Println("正确答案 = ", c.Add(p1, p2))
+
+	tc := elliptic.P384()
+	x3, y3 := tc.Add(p1.X, p1.Y, p2.X, p2.Y)
+	fmt.Println("正确答案 = x=", x3, " y=", y3)
+	//输出待测试答案
+	x3, y3 = c.AddJacobian(p1.X, p1.Y, p2.X, p2.Y)
+	fmt.Println("待测试答案 = x=", x3, " y=", y3)
+
+	return
+}
+
+func TestTimeMul() {
+	c := new(CurveWeierstrass).InitP384()
+	k, _ := new(big.Int).SetString("2123123", 10)
+	//c.Mul(k, c.G)
+	c.ScalarMult(c.G.X, c.G.Y, k)
+
+}
+
+func TestMulJacobian() {
+
+	Simulation.CalculateTimeCostByFunctionWithSpecificData(TestTimeMul)
+
+	//c := new(CurveWeierstrass).InitP384()
+	//
+	//k, _ := new(big.Int).SetString("2123123", 10)
+	//
+	//fmt.Println("正确结果：", c.Mul(k, c.G))
+	//
+	//x, y := c.ScalarMult(c.G.X, c.G.Y, k)
+	//fmt.Println("待测试结果： x=", x, "y=", y)
+
+}
+
+// TestWeierstrassEcc 测试Weierstrass表达的椭圆曲线
 func TestWeierstrassEcc() {
 	//测试用参数
 	P, _ := new(big.Int).SetString("39402006196394479212279040100143613805079739270465446667948293404245721771496870329047266088258938001861606973112319", 10)
@@ -49,7 +107,7 @@ func TestWeierstrassEcc() {
 
 }
 
-// 测试密钥生成是否正确
+// TestGenKeyCor 测试密钥生成是否正确
 func TestGenKeyCor() {
 	//测试用参数
 	P, _ := new(big.Int).SetString("39402006196394479212279040100143613805079739270465446667948293404245721771496870329047266088258938001861606973112319", 10)
@@ -89,7 +147,19 @@ func TestWeierstrassSignature() {
 	fmt.Println(c.Verify(m, s1, s2, pri.Pub))
 }
 
-// 测试加密效果
+func TestWeierstrassSM2() {
+	c := new(CurveWeierstrass).InitP384()
+	pri, err := c.GenerateKey(nil)
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+	m := "123"
+	s1, s2 := c.Signature(m, pri)
+	fmt.Println(c.Verify(m, s1, s2, pri.Pub))
+}
+
+// TestWeierEnc 测试加密效果
 func TestWeierEnc() {
 	c := new(CurveWeierstrass).InitP384()
 	pri, err := c.GenerateKey(nil)

@@ -41,7 +41,7 @@ func BigNumBaseConversion(n *big.Int, base int) string {
 	return result
 }
 
-// 判断是否为2次幂
+// JudgePow2 判断是否为2次幂
 func JudgePow2(x *big.Int) bool {
 	strX := BigNumBaseConversion(x, 2)
 	//查看是否有额外的1
@@ -62,7 +62,7 @@ func Floor(x, y *big.Int) *big.Int {
 func Ceil(x, y *big.Int) *big.Int {
 	if new(big.Int).Mod(x, y).String() == "0" {
 		return new(big.Int).Div(x, y)
-	}else {
+	} else {
 		return new(big.Int).Add(new(big.Int).Div(x, y), Positive1)
 	}
 }

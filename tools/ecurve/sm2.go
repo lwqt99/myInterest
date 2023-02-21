@@ -1,4 +1,4 @@
-package tools
+package ecurve
 
 import (
 	"crypto/rand"
@@ -8,7 +8,6 @@ import (
 	"io/ioutil"
 	"os"
 )
-
 
 func GenerateSM2KeyPairs() error {
 	priv, err := sm2.GenerateKey(rand.Reader) // 生成密钥对
@@ -44,9 +43,8 @@ func LoadKey() (error, *sm2.PrivateKey) {
 
 	privKey, err := x509.ParsePKCS8UnecryptedPrivateKey(block.Bytes)
 	if err != nil {
-		return err,nil
+		return err, nil
 	}
-
 
 	//// 解码公匙
 	//block, _ = pem.Decode(pub)
@@ -65,29 +63,28 @@ func LoadKey() (error, *sm2.PrivateKey) {
 }
 
 /*
-	使用对方的公钥加密
-	content是需要加密的内容
+使用对方的公钥加密
+content是需要加密的内容
 */
-func CreateSm2Encrypt(priv *sm2.PrivateKey, msg []byte) ([]byte,*sm2.PublicKey,error) {
+func CreateSm2Encrypt(priv *sm2.PrivateKey, msg []byte) ([]byte, *sm2.PublicKey, error) {
 	pub := &priv.PublicKey
-	ciphertxt, err := pub.EncryptAsn1(msg,rand.Reader) //sm2加密
+	ciphertxt, err := pub.EncryptAsn1(msg, rand.Reader) //sm2加密
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return ciphertxt,pub,nil
+	return ciphertxt, pub, nil
 }
 
 /*
-	私钥进行解密操作
-	需要使用匹配的私钥进行解密
+私钥进行解密操作
+需要使用匹配的私钥进行解密
 */
-func Sm2Decrypt(priv *sm2.PrivateKey,ciphertxt []byte) (string,error) {
+func Sm2Decrypt(priv *sm2.PrivateKey, ciphertxt []byte) (string, error) {
 	//读取密钥对
-	plaintxt,err :=  priv.DecryptAsn1(ciphertxt)  //sm2解密
+	plaintxt, err := priv.DecryptAsn1(ciphertxt) //sm2解密
 	if err != nil {
 		return "", err
 	}
-	return string(plaintxt),nil
+	return string(plaintxt), nil
 }
-

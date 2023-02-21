@@ -23,6 +23,5 @@ func ReadWord(filePath string) string {
 		}
 		re += "\n"
 	}
-	fmt.Println(1)
 	return re
 }

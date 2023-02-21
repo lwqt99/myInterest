@@ -4,7 +4,7 @@ import (
 	"math/big"
 )
 
-var identityElement = new(Point).SetInt64(-1, -1)//椭圆曲线上的单位元
+var identityElement = new(Point).SetInt64(0, 0) //椭圆曲线上的单位元
 
 func (p *Point) Init(x, y *big.Int) *Point {
 	p.X = new(big.Int).Set(x)
@@ -33,15 +33,15 @@ func (p *Point) Equal(point *Point) bool {
 	return false
 }
 
-//判断是否为单位元
-func IE(point *Point) bool {
+// 判断是否为单位元
+func IsOne(point *Point) bool {
 	if point.X.Cmp(identityElement.X) == 0 && point.Y.Cmp(identityElement.Y) == 0 {
 		return true
 	}
 	return false
 }
 
-//输出String
+// 输出String
 func (p *Point) String() string {
 	return "x=" + p.X.String() + ", y=" + p.Y.String()
 }
